@@ -2,7 +2,7 @@
 ## Training DCGAN on MNIST
 
 ### Intro
-[DCGAN](https://arxiv.org/abs/1511.06434) is a an architecture for generative adversarial nets based on stacked convolutional layers. In the original paper use it to demonstrate *interpolation between bedrooms* and *face algebra* -- wonderful stuff. 
+[DCGAN](https://arxiv.org/abs/1511.06434) is a an architecture for generative adversarial nets based on stacked convolutional layers. In the original paper use it to demonstrate *interpolation between bedrooms* and *face algebra* -- wonderful stuff.
 
 Here, I'm just going to train a (version of) DCGAN on the standard MNIST dataset and try to take a peek at the guts of the network.
 
@@ -35,7 +35,8 @@ mnist_ds= torchvision.datasets.MNIST(DATA, download=True)
 ```
 
 Here's an example of some images from the training set:
-![train-samples](saved_images/real/real_step_0.png)
+
+![train-samples](demo/real_step_0.png)
 
 
 ```python
@@ -46,13 +47,13 @@ This collects all image transformations we want to apply before feeding transfor
 
 
 ```python
-rescale = lambda x: 2 * x -1 
+rescale = lambda x: 2 * x -1
 ```
 
 
 ```python
 transform = transforms.Compose([
-                    transforms.ToTensor(), 
+                    transforms.ToTensor(),
                     rescale
 ])
 ```
@@ -70,7 +71,7 @@ class MNISTDS(Dataset):
         return len(self.mnist_ds)
     def __getitem__(self, i):
         return self.transform(self.mnist_ds[i][0]), self.mnist_ds[i][1]
-    
+
 ```
 
 
@@ -90,9 +91,9 @@ The DCGAN architecture is a bunch of stacked "transposed convolutions". If you'r
 Here, I'm basically copying the [example pytorch implementation of DCGAN](https://github.com/pytorch/examples/blob/master/dcgan/main.py). Only slight modifications are required to fit the generator and discriminator to MNIST data.
 
 ## The Generator
-The principle of the generator is to map *noise vectors* to *fake images*, the former being distributed according to some simple (here, standard-normal) prior, by some deterministic operation. For DCGAN, the latter is defined by upsampling with a sequence of transposed convolutions. 
+The principle of the generator is to map *noise vectors* to *fake images*, the former being distributed according to some simple (here, standard-normal) prior, by some deterministic operation. For DCGAN, the latter is defined by upsampling with a sequence of transposed convolutions.
 
-We start with a noise, or "latent" vector of size (100,1,1), and  treat its last two dimensions as spatial. In effect, the latent vector is a 1x1 image, with 100 indepedent noisy channels. 
+We start with a noise, or "latent" vector of size (100,1,1), and  treat its last two dimensions as spatial. In effect, the latent vector is a 1x1 image, with 100 indepedent noisy channels.
 
 This is then fed through **four transposed convolutional layers**. They all use the same kernel size (4), and
 The first transpose-conv layer uses 64 * 4 filters. As we move up through each subsequent Conv layer in the stack, the number of filters *halves* at each layer, while the linear size of the image *doubles*. The doubling is acheived by setting stride 2 and padding 1 (the definition of 'padding' here is confusing -- see pytorch docs). In between the Conv layers, we use batch normalization, and ReLU for a nonlinearity.
@@ -105,50 +106,50 @@ class Generator(nn.Module):
     def __init__(self, latent_size):
         """latent_size = size of the latent space"""
         super(Generator, self).__init__()
-        
+
         self.latent_size = latent_size
-        
+
         #kernel size
         self.kernel_size =4
         #(proportional to the) number of generator filters
         self.ngf = 64
-        
+
         #takes a latent vector and outputs MNIST-sized image
         #input: (_, nz, 1, 1) latent vector
         self.upsample = nn.Sequential(
-            
+
                                 nn.ConvTranspose2d(self.latent_size, 4 * self.ngf, self.kernel_size,
-                                                      stride=1,padding=0,bias=False), 
-                                nn.BatchNorm2d( 4 * self.ngf), 
+                                                      stride=1,padding=0,bias=False),
+                                nn.BatchNorm2d( 4 * self.ngf),
                                 nn.ReLU(),
                                 #spatial extent here is set by the kernel: (4,4)
-                                
+
                                 #by setting stride=2, we effectively double the output size (up to fiddling
                                 #with the boundary conditions..)
-                                # Weirdly, increasing the 'padding' arg actually decreases the amount of padding 
+                                # Weirdly, increasing the 'padding' arg actually decreases the amount of padding
                                 #that's applied to the input. the only reason padding is being used here is to
                                 #keep the output shapes at nice multiples of two
                                 nn.ConvTranspose2d(4 * self.ngf, 2 * self.ngf, self.kernel_size,
-                                                      stride=2,padding=1, bias=False), 
-                                nn.BatchNorm2d( 2 * self.ngf), 
+                                                      stride=2,padding=1, bias=False),
+                                nn.BatchNorm2d( 2 * self.ngf),
                                 nn.ReLU(),
-                                
+
                                 #( 8,8)
                                 nn.ConvTranspose2d(2 * self.ngf, 1 * self.ngf, self.kernel_size,
-                                                      stride=2,padding=1, bias=False), 
-                                nn.BatchNorm2d( 1 * self.ngf), 
+                                                      stride=2,padding=1, bias=False),
+                                nn.BatchNorm2d( 1 * self.ngf),
                                 nn.ReLU(),
                                 #(16,16)
                                 #here I'm increasing the padding to bring the output size to (28,28)
                                 #for MNIST
                                 nn.ConvTranspose2d(self.ngf, 1, self.kernel_size,
-                                                      stride=2,padding=3, bias=False), 
+                                                      stride=2,padding=3, bias=False),
                                 nn.Tanh(),
                                 #(32,32)
-                                
-                                                                                            
+
+
                                 )
-        
+
     def forward(self, z):
         """Input: (_, latent_size) noise tensor
             Output: (_, 1, 32, 32) generated image tensor"""
@@ -156,7 +157,7 @@ class Generator(nn.Module):
         return self.upsample(z)
 ```
 
-## The Discriminator 
+## The Discriminator
 Roughly speaking, this looks like the generator run in reverse. Four conv layers are applied to input images, with the number of filters *doubling* at each step, and the spatial extent *halving*. This time a LeakyReLU nonlinearity is observed, on the advice of the DCGAN authors.
 
 The output is a single sigmoid neuron, interpreted as the probability of the input coming from the real data distribution.
@@ -166,13 +167,13 @@ The output is a single sigmoid neuron, interpreted as the probability of the inp
 class Discriminator(nn.Module):
     def __init__(self):
         super(Discriminator, self).__init__()
-        
+
         #scaling for the number of filters
         self.nf = 64
-        # kernel size 
+        # kernel size
         self.kernel_size = 4
         #input (1,28,28)
-        
+
         #this is more or less the generator stack run in reverse
         # a stride of 2 and padding of 1 causes the spatial extent to halve at each step
         self.main = nn.Sequential(
@@ -186,9 +187,9 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(.2),
             nn.Conv2d(4*self.nf, 1 , self.kernel_size, stride=1, padding=0, bias=False),
             nn.Sigmoid()
-            
+
         )
-        
+
     def forward(self, x):
         """Input: (_, 1, 28, 28) image
             Output: (_, 1) classification tensor"""
@@ -372,11 +373,11 @@ for epoch in range(epochs):
         G.zero_grad()
         gen_loss.backward()
         optimizerG.step()   
-    
+
         if i % 25 ==0:
             disc_losses.append(disc_loss.item())
             gen_losses.append(gen_loss.item())
-        
+
             #save some examples of real and fake images
             save_image((x+1)/2, "saved_images/real_step_%d.png"%savestep)
             save_image((fake_outputs+1)/2, "saved_images/fake_step_%d.png"%savestep)
@@ -430,26 +431,18 @@ ax.set_ylabel("Gen. loss")
 
 
 
+![losses](demo/output_54_1.png)
 
-    Text(0,0.5,'Gen. loss')
-
-
-
-
-![png](output_54_1.png)
-
-
-![](saved_images/fake_step_299.png)
 
 Here's a sample of the generator outputs at the end of training:
 
-![fake-samples](saved_images/fake_step_378.png)
+![fake-samples](demo/fake_step_378.png)
 
-The samples are crisp and diverse, and I'm impressed by the variation in stroke width. What's cool about the GAN is that, when it makes mistakes, it seems to make human-like mistakes -- writing a *single digit* sloppily, for example, rather than blurring several similar digits together. 
+The samples are crisp and diverse, and I'm impressed by the variation in stroke width. What's cool about the GAN is that, when it makes mistakes, it seems to make human-like mistakes -- writing a *single digit* sloppily, for example, rather than blurring several similar digits together.
 
 Here's a time lapse of samples from the generator, each frame corresponding to one "savestep". The digits become realistic remarkably quickly -- even a few epochs will produce crisp samples.
 
-![fake-timelapse](saved_images/fake.gif)
+![fake-timelapse](demo/fake.gif)
 
 ### What's going on inside the generator?
 
@@ -511,14 +504,7 @@ plt.imshow(intermediate_numpy[-1][sample_index, 0, ...], cmap='gray')
 ```
 
 
-
-
-    <matplotlib.image.AxesImage at 0x7f39e21cd198>
-
-
-
-
-![png](output_69_1.png)
+![png](demo/output_69_1.png)
 
 
 Now look a some of the penultimate filter bank outputs (post-nonlinearity)
@@ -545,10 +531,10 @@ fig, axes = plot_filter_outputs(sample_index, -2)
 ```
 
 
-![png](output_72_0.png)
+![png](demo/output_72_0.png)
 
 
-These are interesting. A lot of them have outputs which clearly 'shadow' the digit ends up producing.
+These are interesting. A lot of them have outputs which clearly 'shadow' the digit which the generator ends up producing.
 
 Go another layer deep...
 
@@ -558,7 +544,7 @@ fig, axes = plot_filter_outputs(sample_index, -3)
 ```
 
 
-![png](output_75_0.png)
+![png](demo/output_75_0.png)
 
 
 
@@ -567,7 +553,7 @@ fig, axes = plot_filter_outputs(sample_index, -4)
 ```
 
 
-![png](output_76_0.png)
+![png](demo/output_76_0.png)
 
 
 These are the first nonlinearity outputs after the noise vector is generated.
